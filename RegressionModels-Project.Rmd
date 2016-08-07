@@ -1,0 +1,282 @@
+---
+classoption: a4paper
+fontsize: 10pt
+mode: selfcontained
+output: html_document
+---
+
+<center><h3> Regression Models Course Project - Motor Trend Analysis </h3></center>
+<center><h4> Jean-Michel Coeur, Regression Models - Assignment, 24 April 2016 <h4></center>
+<p align="center"> <img/>
+</p>
+
+```{r setup, cache = F, echo = F, message = F, warning = F, tidy = T, results='hide'}
+# Define document format parameters
+require(knitr)
+options(width = 100)
+```
+
+#### 1. Executive Summary
+
+
+As part of a study for Motor Trend, a magazine about the automobile industry, we are Looking at a data set of a collection of cars to explore the relationship between a set of variables (predictors) and miles per gallon (MPG) (outcome). The magazine is particularly interested in the following two questions:
+
+    1. Is an automatic or manual transmission better for MPG?
+    2. Quantify the MPG difference between automatic and manual transmissions
+
+We will start with an exploratory analysis that includes a few plots to get a sense of what's going on. We will then apply a set of models to answer to the two questions. The figures are shown in the apendix.
+
+#### 2. Exploratory Data Analysis
+
+```{r eval = TRUE, results = 'hide', message = FALSE, warning = FALSE, echo = FALSE}
+### 2. Environment in use for the analysis
+
+# Required R packages to perform the analysis
+require(ggplot2)    # Plotting system in use for the analysis
+require(gridExtra)  # Arrange plots in grid
+require(GGally)     # Use to display corelation between pairs of variables
+require(datasets)   # Car datasets
+require(car)        # Measure of Variance Inflation
+```
+
+We take the `mtcars` dataset available in R, which carries the following variables:
+
+- [, 1]	mpg:	  Miles/(US) gallon  .............. [, 2]	cyl:	  Number of cylinders
+- [, 3]	disp:	  Displacement (cu.in.) .......... [, 4]	hp:	    Gross horsepower
+- [, 5]	drat:	  Rear axle ratio ................... [, 6]	wt:	    Weight (1000 lbs)
+- [, 7]	qsec:   quarter of mile in sec .......... [, 8]	vs:	    V/S V Engine vs. Straight Engine
+- [, 9]	am:	    Transmission (0 = automatic, 1 = manual)
+- [,10]	gear:	  Number of forward gears ....... [,11]	carb:	  Number of carburetors
+
+We conduct the require transformation on variables (factor) and check that we don't have any missing value.
+
+```{r, echo = FALSE}
+# First look at the variables
+mtc <- mtcars
+# We don't display the result of str(mtc) as we are limited to 2 pages
+# str(mtc)
+
+# We rename the variables for a better understanding
+colnames(mtc) <- c('mpg', 'cyl', 'displace', 'horsepower', 'rearaxle', 'weight', 
+                   'quartmile', 'vsengine', 'transmis', 'fgear', 'carbu')
+# Verification that we don't carry missing values in the dataset
+# sum(!complete.cases(mtc[1:nrow(mtc), ]))
+
+# We transform `tranmis` into a factor variable with Level 0 = "automatic" (transmission) 
+# and Level 1 = "manual" (transmission)
+mtc_origin <- mtc
+mtc$transmis <- factor(mtc$transmis, levels = c(0,1), labels = c("automatic", "manual"))
+
+mtc$vsengine <- factor(mtc$vsengine)
+```
+
+- From the figure 1 (see Apendix), our dataset is not quite normally distributed, something that we need to keep in mind when we will look at the results of our analysis. We have too few datapoints.
+- From the Figure 2, manual transmission seems to be more mileage efficient than automatic transmission.
+
+#### 3. Building a base model
+
+
+In this analysis, we use Linear Models, starting with `transmis` as the only regressor, and `mpg` as our output variable.
+
+```{r, echo = TRUE}
+fit_lmbase <- lm(formula = mpg ~ transmis, data = mtc)
+# Model coefficients
+summary(fit_lmbase)$coeff
+```
+
+With the probability of having mileage per gallon > 17.147 being far less than 5% for the manual transmission and probability of having Mileage ber gallon > 7.24 + 17.147 for automatic transmission also far less than 5%, `transmis` is a strongly significant variable, within a 95% confidence interval.
+
+- According to this results, a car with manual transmission is better for Miles Per Gallon than a car with automatic transmission.
+- A car with manual transmission will drive 7.245 miles more than a car with automatic transmission (coefficient `transmismanual`).
+
+However, transmission only explain 36% (R^2 = 0.3598) of the variance. Other covariate(s) is(are) missing, which should explain better the dependent variable `transmis`.
+
+#### 4. Model strategy - Using nested models
+
+##### 4.1. Choosing the right covariates
+
+We include all variables into a linear model and then consider the 4 most significant variables to build further models. 
+```{r, echo = TRUE}
+fit_lmall <- lm(formula = mpg ~ ., data = mtc)
+head(sort(summary(fit_lmall)$coeff[,4]), 5)
+```
+
+`weight`, `transmis`, `quartmile` and `horsepower` are the most significant variables, based on their lowest p-value, although they can't explain the difference in mileage per gallon within a 95% confidence interval since none of these p-values are below 0.05.
+
+##### 4.2 Correlation & Variance Inflation Factor
+```{r, echo = FALSE}
+# Correlation matrix of the four regressors
+mtc_cor <- mtc_origin[, names(mtc_origin) %in% c('transmis', 'weight', 'quartmile', 'horsepower')]
+#cor(mtc_cor) # We don't display as we have only 2 pages for the analysis
+```
+
+Figure 3 in the appendix illustrates the correlation between the four variables `cor(mtc_cor)`:
+
+- `weight` is highly correlated to `transmis`. We may consider modeling the interaction between `weight` & `transmis` in one of our models.
+- `horsepower` is highly correlated with `weight` & `quartmile`. Its addition to a model that has already `weight` & `quartmile` might not be significant. 
+
+Let's looking at the Variance Inflation Factor, which identifies the influence a given variable has on the model variance:
+```{r, echo = FALSE}
+vif_three <- sort(vif(fit_lmall)[c('weight','quartmile','horsepower')], decreasing = TRUE)
+vif_three
+```
+
+Adding `weight` to our base model will significantly increase our model variance.
+
+##### 4.3 Nested models approach
+
+We will use the `fit_lmbase` model computed earlier as baseline, and add the other covariates, one by one. Such covariate adjustment through multiple models probes the adjustment effect, and evaluates the model for its robustness.
+
+```{r, echo = TRUE}
+# fit_lmbase includes transmis as single regressor
+fit_lm2 <- lm(formula = mpg ~ transmis + weight, data = mtc)
+# We model the interaction betweem transmis & weight, given their high correlation
+# and keep it in the subsequent model
+fit_lm3 <- lm(formula = mpg ~ transmis * weight, data = mtc) 
+fit_lm4 <- lm(formula = mpg ~ transmis * weight + quartmile, data = mtc)
+fit_lm5 <- lm(formula = mpg ~ transmis * weight + quartmile + horsepower, data = mtc)
+
+df_adj <- data.frame(adj.r.squared = cbind(summary(fit_lm2)$adj.r.squared, 
+                                           summary(fit_lm3)$adj.r.squared,
+                 summary(fit_lm4)$adj.r.squared, summary(fit_lm5)$adj.r.squared))
+colnames(df_adj) <- c('Model2', 'Model3', 'Model4', 'Model5')
+df_adj
+```
+The addition of the interaction between `weight` and `transmis` increases the Adjusted R Square by 0.08. Model4 ( mpg ~ transmis * weight + quartmile) seems to be the model that explains the variance the best, at 89%.
+
+##### 4.4 Choosing the best model
+
+We use Anova to verify the significance of each parameter that we add.
+
+```{r, echo = TRUE}
+# Analysis of Variance Table
+anova(fit_lmbase, fit_lm2, fit_lm3, fit_lm4, fit_lm5)
+```
+
+The three asterisks, ***, at the lower right of the printed table indicate that the null hypothesis is rejected at the 0.001 level, so the additional regressor is significant for each new model, except for model 5. 
+
+```{r, echo = FALSE}
+# Best model
+suml4 <- summary(fit_lm4)
+suml4$coefficients
+suml4$adj.r.squared
+```
+
+Based on the calculated p-value, a false rejection of the null hypothesis is extremely unlikely. 
+However, this variance analysis is sensitive to its assumption that model residuals are approximately normal.
+We test the residuals for normality using the Shapiro-Wilk test:
+
+```{r, echo = FALSE}
+shapiro <- shapiro.test(fit_lm4$residuals)
+data.frame(shapiro$statistic, shapiro$p.value)
+```
+
+The Shapiro-Wilk p-value of 0.1001 fails to reject normality, supporting confidence in our analysis of variance. 
+Therefore, we are confident that `fit_lm4` is significantly better than all the other models.
+Let's perform a few diagnostic tests, to identify some outliers.
+
+```{r, echo = FALSE}
+# Detect inluence points
+dfbet <- dfbetas(fit_lm4)
+outliers <- tail (sort(dfbet[,4]), 3)
+names(outliers)
+```
+These are the three outliers cars that are highlighted in Figure 4, Normal Q-Q plot.
+
+### 4. Conclusion
+
+When including additional covariates, the influence of the transmission type is adjusted with the weight as follows (coefficients of Model4): `14.08 -2.94 * weight -4.14 * weight`
+A car with manual transmission will in fact drive `14.08 -2.94 * weight -4.14 * weight` miles more than a car with automatic transmission (coefficient `transmismanual`).
+
+- A car with manual transmission will drive more miles than a car with automatic transmission if its weight is below 14.08 / 7.08 = 1988 pounds.
+- A car with manual transmission will drive less miles than a car with automatic transmission if it's weight is obove 1988.
+
+This conclusion is based on the average estimates. 
+Looking at the confidence intervals:
+```{r, echo = FALSE}
+confint(fit_lm4)
+```
+Given the size of the confidence intervals for the `transmis` variable, and how weight impacts the model, we need to perform further analysis before drawing any conclusion.
+As a result, there is no clear answer to the question: "Is an automatic or manual transmission better for MPG?".
+
+
+
+------------------------------------------------------------------------------------------
+
+### ----------------------------------- Appendix ----------------------------------- 
+
+
+#### Figure 1 & 2
+
+```{r Distribution_plot, echo = FALSE, fig.width = 4, fig.height = 3, fig.align = 'center'}
+# We plot the density function
+g1 <- ggplot(mtc, aes(x = mpg)) +
+  geom_histogram(alpha = .20, binwidth = 3, colour = "black", aes(y = ..density..)) +
+  ggtitle("Figure 1\n\nDistribution of mileage per gallon \nacross the dataset") +
+  xlab("Mileage per gallon") + 
+  ylab("Density") +
+  theme(plot.title = element_text(size = 10))
+```
+
+```{r Spread_Mileage, echo = FALSE, fig.width = 10, fig.height = 5, fig.align = 'center'}
+
+g2 <- ggplot(mtc, aes(x = transmis, y = mpg, fill = transmis)) + geom_boxplot(color = "black", size = 0.75) +
+  ggtitle("Figure 2\n\nEffect of the Transmission type \non Mileage per gallon") + 
+  theme(plot.title = element_text(size = 10)) +
+  theme(axis.text = element_text(size = 10)) +
+  xlab("Transmission type") + 
+  theme(axis.title.x = element_text(size = 10)) +
+  ylab("Mileage per gallon") +
+  theme(axis.title.y = element_text(size = 10)) +
+  guides(fill = guide_legend(title="Transmission \nType")) 
+# g
+
+grid.arrange(g1, g2, ncol=2)
+```
+
+------------------------------------------------------------------------------------------
+
+#### Figure 3
+
+```{r Colleration_Plot, echo = FALSE, fig.width = 7, fig.height = 7, fig.align = 'center'}
+my_fn <- function(data, mapping, method = "loess", ...){
+      p <- ggplot(data = data, mapping = mapping) + 
+      geom_point() + 
+      geom_smooth(method = method, ...)
+      p
+}
+g <- ggpairs(mtc_cor, lower = list(continuous = wrap(my_fn, method="lm")), 
+             title = "Correlation between the 4 regressors used to build the linear models") +
+  theme(plot.title = element_text(size = 11)) +
+  theme(axis.text = element_text(size = 9)) +
+  theme(axis.title.x = element_text(size = 9)) +
+  theme(axis.title.y = element_text(size = 9))
+g
+```
+
+
+------------------------------------------------------------------------------------------
+
+#
+#
+#### Figure 4
+Snapshot of the best model: "mpg ~ transmis * weight + quartmile".
+
+- Residuals are randomly spread on "Residuals vs. Fitted" and "Scale-Location" charts.
+- Normality test shows the increased variance due to the inclusion of `weight` in the model.
+
+
+```{r best_model, echo = FALSE, fig.width = 8, fig.height = 9, fig.align = 'center'}
+# We use base graphic for convenience
+par(mfrow = c(2,2))
+plot(fit_lm4)
+
+```
+
+
+                            ----------------- End of the analysis ----------------- 
+
+
+
+
+

@@ -1,0 +1,256 @@
+---
+output: html_document
+---
+<center><h3>Analysis of the Vitamin C effect on Tooth Growth in Guinea Pigs</h3></center>
+<center><h5>Jean-Michel Coeur, Statistical Inference Project 2, 3 April 2016</h5></center>
+
+### 1. Overview
+In an experiement with guinea pigs, each guinea pig received one of three dose levels of vitamin C by one of two delivery methods: either through Orange Juice or through Ascorbic Acid. At the end of the experiement, we measured their tooth growth.
+
+In this analysis, we will investigate the effect of Vitamin C on Tooth Growth in Guinea Pigs and answer specifically to the following question: Do the delivery method and/or dosage affect the tooth growth in Guinea Pigs?
+
+To perform this analysis, we use data from the R dataset `ToothGrowth`, which contain the result of the experiment. This code book describes the analysis process and the results obtained at each step to reach to the conclusions.
+
+```{r, results = 'hide', message = FALSE, warning = FALSE, echo = FALSE}
+# Required R packages to perform the analysis
+require(datasets)   # Load various datasets including the ToothGrowth dataset
+require(ggplot2)    # Plotting system in use for the analysis
+require(knitr)      # Results Test formatting
+```
+
+### 2. Data summary
+At a glance, we look at:
+
+  - The Number of observations,
+  - Number and type of variables,
+  - Missing values,
+  - Range of results.
+
+```{r , echo = FALSE, eval = TRUE}
+# To facilitate the manipulation of the dataset, we assign it to the variable 'tg'
+tg <- ToothGrowth
+```
+
+#### Exploratory analysis details: please see the paragraph 7.2 of the appendix.
+
+- From the exploratory analysis, we discovered 60 observations, corresponding to 60 Guinea Pigs, and 3 variables:
+
+    - "len": length of odontoblasts (cells responsible for tooth growth): response of the experiment
+    - "supp": delivery methods: OJ (Orange Juice) or VC (ascorbic acid, which is a form of vitamin C).
+    - "dose": 0.5, 1, and 2 mg/day
+
+We have an identical number of guinea pigs (10) who received a given dose (either 0.5, 1 or 2 mg/day) in a given delivery method: Orange Juice or Vitamin C (ascorbic acid).
+
+To get an idea about the data, we plot the length of the tooths in comparison to the doses, and delivery methods. We use boxplots to get a sense of tooth lengh range per dose and delivery method.
+
+```{r, echo = FALSE, fig.width = 5, fig.height = 4, fig.align = 'center'}
+tg$dose <- factor(tg$dose) # To facilitate the processing by ggplot with facet_wrap
+
+g <- ggplot(tg, aes(x = supp, y = len)) + geom_boxplot(color = "blue") +
+  ggtitle("Guinea Pigs tooth length per dose (mg/day), per delivery method") + 
+  theme(plot.title = element_text(size = 10)) +
+  xlab("Delivery methods: OJ = Orange Juice, VC = Vitamin C") + 
+  theme(axis.title.x = element_text(size = 10)) +
+  ylab("Tooth Length") +
+  theme(axis.title.y = element_text(size = 10)) +
+  facet_wrap(~dose, labeller = "label_both") # We split the graph per dose
+g
+```
+
+From the graph, we can draw two empiric hypothesis, which we will test further in this paper:
+
+   - Hypothesis 1: The dose amount affects positively the tooth growth, regardless of the delivery method.
+   - Hypothesis 2: The Orange Juice (OJ) affects positively the tooth growth, compare to the Vitamin C (VC).
+   
+### 3. Assumptions
+
+   - We consider that each group of guinea pig is normally distributed.
+   - We consider each group independent, with unequal variance, and not paired, because each guinea pig receives a single treatment with a single delivery method.
+
+### 4. Hypothesis 1 - The dose amount affects positively the tooth growth
+
+   - Null hypothesis H0: Guinea Pigs tooth length with dose = x > Guinea Pigs tooth length with dose = y
+   - We compare each group of 20 pigs who received 0.5, 1 or 2 mg/day.
+   - Because the size of the groups are rather small, we perform a Student Test ( t = (X'-mu)/(s/sqrt(n)) ) on two of the three groups at a given time. We use the R function `t.test()`.
+   - We consider a confidence interval of 95% with one side-test and we look at the p-value to accept or reject the null hypothesis. if p-value < 5%, we fail to reject the null hypothesis.
+
+See Apendix 7.4 for the corresponding R code.
+
+```{r, echo = FALSE, eval = TRUE}
+# We compare the group receiving 1 mg/day with the group receiving 0.5 mg/day. 
+t_test_dose1 <- t.test(tg[tg$dose == 1,]$len, tg[tg$dose == 0.5,]$len, paired = FALSE, 
+                      var.equal = FALSE, alternative = "greater")
+# We compare the group receiving 2 mg/day with the group receiving 0.5 mg/day. 
+t_test_dose2 <- t.test(tg[tg$dose == 2,]$len, tg[tg$dose == 0.5,]$len, paired = FALSE,
+                       var.equal = FALSE, alternative = "greater")
+# We compare the group receiving 2 mg/day with the group receiving 1 mg/day. 
+t_test_dose3 <- t.test(tg[tg$dose == 2,]$len, tg[tg$dose == 1,]$len, paired = FALSE,
+                       var.equal = FALSE, alternative = "greater")
+
+result <- data.frame(matrix( c("Dose 1 mg > 0.5 mg", "Dose 2 mg > 0.5 mg", 
+                               "Dose 2 mg > 1 mg",
+                               round(t_test_dose1$p.value,10),
+                               round(t_test_dose2$p.value,10),
+                               round(t_test_dose3$p.value,10)), ncol = 2))
+colnames(result) <- c("Test", "P-Value")
+kable(result)
+```
+
+Each P-Value is largely lower than 5%. We fail to reject the null hypothesis. Therefore, the dosage does affect positively the tooth growth in the guinea pigs.
+Because the dosage has such impact, we will test the second hypothesis below, knowing the dose amount.
+
+### 5. Hypothesis 2 - The Orange Juice (OJ) affects positively the tooth growth, compare to the Vitamin C
+
+   - Null hypothesis H0: Guinea Pigs tooth length who had Orange Juice > Guinea Pigs tooth length who had Vitamin C
+
+   - We compare each group of 10 pigs who received Orange Juice or Vitamin C, in quantity of 0.5, 1 or 2 mg/day.
+   - Because the size of the groups are rather small, we perform a Student Test ( t = (X'-mu)/(s/sqrt(n)) ) to compare groups. We use the R function `t.test()`.
+   - At a given time, we compare two groups who received the same dose. 
+   - We consider a confidence interface of 95% with one side-test and we look at the p-value to accept or reject the null hypothesis. if p-value < 5%, we fail to reject the null hypothesis.
+   
+See Apendix 7.5 for the corresponding R code.
+   
+```{r, echo = FALSE}
+
+# Within a given group who receive the same dose, we compare the group receiving 
+# Orange Juice to the group receiving Vitamin C
+t_test_ov_vc_05 <- t.test(tg[tg$supp == "OJ" & tg$dose == "0.5",]$len, 
+                        tg[tg$supp == "VC" & tg$dose == "0.5",]$len, paired = FALSE,
+                        var.equal = FALSE, alternative = "greater")
+t_test_ov_vc_1 <- t.test(tg[tg$supp == "OJ" & tg$dose == "1",]$len, 
+                        tg[tg$supp == "VC" & tg$dose == "1",]$len, paired = FALSE,
+                        var.equal = FALSE, alternative = "greater")
+t_test_ov_vc_2 <- t.test(tg[tg$supp == "OJ" & tg$dose == "2",]$len, 
+                        tg[tg$supp == "VC" & tg$dose == "2",]$len, paired = FALSE,
+                        var.equal = FALSE, alternative = "greater")
+
+result <- data.frame(matrix( c("Dose 0.5 mg: Orange Juice > Vitamin C",
+                               "Dose  1 mg: Orange Juice > Vitamin C",
+                               "Dose  2 mg: Orange Juice > Vitamin C",
+                               round(t_test_ov_vc_05$p.value, 10), 
+                               round(t_test_ov_vc_1$p.value, 10), 
+                               round(t_test_ov_vc_2$p.value,10)), ncol = 2))
+colnames(result) <- c("Test", "P-Value")
+kable(result)
+```
+
+- With a dose of 0.5 and 1mg/day, Considering a 95% confidence interval, we fail to reject the null hypothesis that "Orange Juice affect positively the tooth growth in the guinea pigs".
+- However, when guinea pigs receive 2mg/day, we have pvalue = 0.51807, which is greater than 5%. Considering a 95% confidence interval, we reject the null hypothesis and accept the alternative: Vitamin C does not affect positively tooth growth in the guinea pigs when they receive a dosage of 2mg/day.
+
+### 6. Conclusions
+Yes, delivery methods and dosage affect tooth growth in guinea pig:
+
+1. The dose amount affects positively the tooth growth, regardless of the delivery method.
+2. The delivery method has mixed effects on the tooth growth:
+    - When guinea pigs receive a dosage of 2mg/day, Vitamin C affect positively tooth growth.
+    - When guinea pigs receive a dosage of less than 2mg/dayin, Vitamin C doesn't have a positive effect of their tooth growth.
+
+Overal, the impact of Vitamin C is unconclusive. We would need more data, perhaps results with an higher dosage to draw a more precise conclusion.
+
+### 7. Appendix
+
+#### 7.1. Environment in use for the analysis
+
+- R libraries in use.
+
+```{r, echo = TRUE, eval = FALSE}
+# Required R packages to perform the analysis
+require(datasets)   # Load various datasets including the ToothGrowth dataset
+require(ggplot2)    # Plotting system in use for the analysis
+require(knitr)      # Results Test formatting
+```
+
+
+#### 7.2. Exploratory analysis
+
+
+- R Functions used to perform Exploratory analysis.
+
+```{r, echo = TRUE, eval = TRUE}
+# To facilitate the manipulation of the dataset, we assign it to the variable 'tg'
+tg <- ToothGrowth
+
+# str() provides a good overview of the dataset
+str(tg)
+
+# Number of doses and number of pigs who received these doses in each delivery method
+table(tg$dose, tg$supp) 
+# Range of Tooth Growth to get some perspective
+range(tg$len)
+```
+
+
+#### 7.3 Distribution of guinea pig tooth growth per dosage and delivery method
+
+- R Functions used to display the distribution of guinea pigs tooth length per dosage and per delivery method.
+
+```{r, echo = TRUE, eval= FALSE}
+tg$dose <- factor(tg$dose) # To facilitate the processing by ggplot with facet_wrap
+
+g <- ggplot(tg, aes(x = supp, y = len)) + geom_boxplot(color = "blue") +
+  ggtitle("Guinea Pigs tooth length per dose (mg/day), per delivery method") + 
+  theme(plot.title = element_text(size = 10)) +
+  xlab("Delivery methods: OJ = Orange Juice, VC = Vitamin C") + 
+  theme(axis.title.x = element_text(size = 10)) +
+  ylab("Tooth Length") +
+  theme(axis.title.y = element_text(size = 10)) +
+  facet_wrap(~dose, labeller = "label_both") # We split the graph per dose
+g
+```
+
+#### 7.4 Hypothesis 1: The dose amount affects positively the tooth growth
+
+- Student Tests performed to test the Null hypothesis: The dose amount affects positively the tooth growth.
+
+```{r, echo = TRUE, eval = FALSE}
+# We compare the group receiving 1 mg/day with the group receiving 0.5 mg/day. 
+t_test_dose1 <- t.test(tg[tg$dose == 1,]$len, tg[tg$dose == 0.5,]$len, paired = FALSE, 
+                      var.equal = FALSE, alternative = "greater")
+# We compare the group receiving 2 mg/day with the group receiving 0.5 mg/day. 
+t_test_dose2 <- t.test(tg[tg$dose == 2,]$len, tg[tg$dose == 0.5,]$len, paired = FALSE,
+                       var.equal = FALSE, alternative = "greater")
+# We compare the group receiving 2 mg/day with the group receiving 1 mg/day. 
+t_test_dose3 <- t.test(tg[tg$dose == 2,]$len, tg[tg$dose == 1,]$len, paired = FALSE,
+                       var.equal = FALSE, alternative = "greater")
+
+result <- data.frame(matrix( c("Dose 1 mg > 0.5 mg", "Dose 2 mg > 0.5 mg", 
+                               "Dose 2 mg > 1 mg",
+                               round(t_test_dose1$p.value,8),
+                               round(t_test_dose2$p.value,8),
+                               round(t_test_dose3$p.value,8)), ncol = 2))
+colnames(result) <- c("Test", "P-Value")
+kable(result)
+```
+
+#### 7.5 Hypothesis 2 - The Orange Juice (OJ) affects positively the tooth growth, compare to the Vitamin C
+
+- Student Tests performed to test the Null hypothesis: The Orange Juice (OJ) affects positively the tooth growth 
+
+```{r, echo = TRUE, eval = FALSE}
+
+# Within a given group who receive the same dose, we compare the group receiving 
+# Orange Juice to the group receiving Vitamin C
+t_test_ov_vc_05 <- t.test(tg[tg$supp == "OJ" & tg$dose == "0.5",]$len, 
+                        tg[tg$supp == "VC" & tg$dose == "0.5",]$len, paired = FALSE,
+                        var.equal = FALSE, alternative = "greater")
+t_test_ov_vc_1 <- t.test(tg[tg$supp == "OJ" & tg$dose == "1",]$len, 
+                        tg[tg$supp == "VC" & tg$dose == "1",]$len, paired = FALSE,
+                        var.equal = FALSE, alternative = "greater")
+t_test_ov_vc_2 <- t.test(tg[tg$supp == "OJ" & tg$dose == "2",]$len, 
+                        tg[tg$supp == "VC" & tg$dose == "2",]$len, paired = FALSE,
+                        var.equal = FALSE, alternative = "greater")
+
+result <- data.frame(matrix( c("Dose 0.5 mg: Orange Juice > Vitamin C",
+                               "Dose  1 mg: Orange Juice > Vitamin C",
+                               "Dose  2 mg: Orange Juice > Vitamin C",
+                               round(t_test_ov_vc_05$p.value, 8), 
+                               round(t_test_ov_vc_1$p.value, 8), 
+                               round(t_test_ov_vc_2$p.value,8)), ncol = 2))
+colnames(result) <- c("Test", "P-Value")
+kable(result)
+```
+
+
+
+                      ----------------- End of the analysis ----------------- 
+

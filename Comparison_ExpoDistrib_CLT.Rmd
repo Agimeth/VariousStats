@@ -1,0 +1,205 @@
+---
+output: html_document
+---
+
+<center><h3>Comparison of the exponential distribution with the Central Limit Theorem</center></h3>
+<center><h5>Jean-Michel Coeur, Statistical Inference Project 1, 3 April 2016</h5></center>
+
+### 1. Overview
+
+In this project we will investigate the exponential distribution in R and compare it with the Central Limit Theorem. This theorem states that the distribution of averages of iid variables (properly normalized) becomes that of a standard normal as the sample size increases.
+
+To perform this analysis, we will simulate 1000 samples of averages of 40 exponential iid variables and perform the following steps:
+
+  1. Show the sample mean and compare it to the theoretical mean of the distribution.
+  2. Show how variable the sample is (via variance) and compare it to the theoretical variance of the distribution.
+  3. Show that the distribution is approximately normal.
+
+This code book describes the analysis process and the results obtained at each step to reach to the  conclusions.
+
+### 2. Environment in use for the analysis
+
+R libraries in use:
+```{r, results = 'hide', message = FALSE, warning = FALSE, echo = TRUE}
+# Required R packages to perform the analysis
+require(ggplot2)    # Plotting system in use for the analysis
+```
+
+### 3. Data Simulation
+
+From wikipedia: the exponential distribution is the probability distribution that describes the time between events in a Poisson process, in which events occur continuously and independently at a constant average rate lambda.
+This exponential distribution has two properties:
+
+   - a Mean `mu=1/lambda` and a Standard Deviation `sigma=1/lambda`.
+
+To perform our analysis, we simulate the 1000 samples of 40 exponentials using the R function 
+`rexp(nb, lamda)` with the following parameters:
+
+   - nb = number of samples * size of each sample: 1000 * 40
+   - lambda = 0.2.
+
+```{r, echo = TRUE}
+# To ensure reproduceability
+set.seed(1769)
+# Rate
+lambda <- 0.2
+# Theoretical Mean & Standard Deviation
+t_mean <- t_sd <- 1/lambda # 5
+
+# Samples size
+n <- 40
+# Number of simulations
+nosim <- 1000
+
+# We simulate 1000 samples of 40 exponentials
+# Each row of the matrix represents 1 sample. We have 1000 rows.
+mat <- matrix(rexp(nosim * n, lambda), ncol = n)
+
+# We compute the mean of each sample and store it in a data frame as requested by ggplot 
+# for later display in this analysis
+nosim_averages <- data.frame(xm = apply(mat, 1, mean))
+
+# We compute the variance of each sample and store it in a data frame as requested by 
+# ggplot for later display in this analysis
+ts_var <- function(x) { sd(x)^2 / n } 
+nosim_variances <- data.frame(xv = apply(mat, 1, ts_var))
+```
+
+The dataframe `nosim_averages` contains the averages of each of the 1000 samples of 40 exponentials.
+
+The dataframe `nosim_variances` contains the variances of each of the 1000 samples of 40 exponentials 
+
+### 4. Sample Mean versus Theoretical Mean
+
+The CLT states that averages are approximately normal, with distributions centered at the population mean with standard deviation equal to the standard error of the mean.
+
+We compute the sample mean from the 1000 samples averages.
+The theoretical mean mu = lambda = 5.
+
+```{r, echo = TRUE}
+# Compute the sample mean of the simulations
+s_mean <- mean(nosim_averages$xm)
+sd_ <- sd(nosim_averages$xm)
+paste("Theoretical mean = ", t_mean); paste("Sample mean = ", round(s_mean, 3))
+```
+
+The sample mean is very close to the theoretical mean.
+
+```{r mean_plot, echo = TRUE, fig.width = 9, fig.height = 6, fig.align = 'center'}
+# We plot the density
+g <- ggplot(nosim_averages, aes(x = xm)) +
+     geom_histogram(alpha = .20, binwidth=.2, colour = "black", aes(y = ..density..)) +
+     ggtitle("Distribution of exponentials sample means") + xlab("Sample Means") + 
+     ylab("Density") + geom_density(colour="darkgoldenrod", size=1) 
+
+# We store the values and labels of means in a dataframe for display
+d <- data.frame(mean = c(s_mean, t_mean), name = c("Sample mean", "Theoretical mean"))
+
+# Add the vertical line and label: Thoeretical Mean
+g <- g + geom_vline(xintercept = s_mean, size = 1.5, color = 'blue') +
+     geom_text(data = d, 
+               mapping = aes(x=mean[1], y=0,
+                             label=paste(name[1],round(s_mean, 3), sep = ": "),
+                             angle = 90, vjust = 1.5, hjust = 0))
+
+# Add the vertical line and label: Sample Mean
+g <- g + geom_vline(xintercept = t_mean, size = 1.5, color = 'red') +
+     geom_text(data = d, 
+              mapping = aes(x=mean[2], y=0, label=paste(name[2], t_mean, sep = ": "), 
+                        angle = 90, vjust = -0.8, hjust = 0))
+g
+
+```
+
+The figure above represents the distribution of the averages of each sample.
+
+   - The red vertical line represents the value of the theoretital mean (population mean) `mu = 5`.
+   - The blue vertical line represents the value of the sample mean of the averages `ms = 5.025`
+
+We can see that the distribution of the averages is centered at the population mean (mu = 5), as per the Central Limit Theorem.
+
+### 5. Sample Variance versus Theoretical Variance
+
+The theoretical variance of a sample is equal to variance divided by the size of the sample: 
+
+`var = sigma^2 / n`
+
+The Central Limit Theorem states that averages are approximately normal, with distributions centered at the population mean with standard deviation equal to the standard error of the mean.
+Therefore, the mean of the sample variances should be close to the theoritical variance of a sample of size n.
+
+```{r, echo = TRUE}
+# Theoretical variance of sample of size n
+t_var <- t_sd^2 / n
+# Compute the sample variance from the mean of the distribution of 1000 variances
+s_var <- mean(nosim_variances$xv)
+
+paste("Theoretical variance = ", t_var); paste("Sample variance = ", round(s_var, 3))
+```
+
+Once again, as we increase the number of simulations (here nosim = 1000), the sample variance (s_var) is close to the theoretical variance (t_var).
+
+```{r variance_plot, echo = TRUE, fig.width = 9, fig.height = 6, fig.align = 'center'}
+# We plot the density
+g <- ggplot(nosim_variances, aes(x = xv)) + 
+     geom_histogram(alpha = .20, binwidth=.1, colour = "black", aes(y = ..density..)) +
+     ggtitle("Distribution of exponentials sample variances") + xlab("Sample Variances") + 
+     ylab("Density") + geom_density(colour="darkgoldenrod", size=1) 
+
+# We store the values and labels of means in a dataframe for display
+d <- data.frame(var = c(s_var, t_var), name = c("Sample variance","Theoretical variance"))
+
+# Add the vertical line and label: Thoeretical Mean
+g <- g + geom_vline(xintercept = s_var, size = 1.5, color = 'blue') +
+     geom_text(data = d, 
+               mapping = aes(x=var[1], y=0, 
+                             label=paste(name[1], round(s_var, 3), sep = ": "), 
+                             angle = 90, vjust = 1.5, hjust = 0))
+
+# Add the vertical line and label: Sample Mean
+g <- g + geom_vline(xintercept = t_var, size = 1.5, color = 'red') +
+     geom_text(data = d, 
+               mapping = aes(x=var[2], y=0, label=paste(name[2], t_var, sep = ": "), 
+                             angle = 90, vjust = -0.8, hjust = 0))
+g
+
+```
+
+The figure above represents the distribution of the variances of each sample.
+
+   - The red vertical line represents the value of the theoretital variance `v = 0.625`.
+   - The blue vertical line represents the value of the sample variance `vs = 0.633`
+
+We verify that the sample variance (blue line) is close to the Theoretical variance (red line).
+The distribution of the sample variances is centered to the theoretical variance, as per the Central Limit Theorem.
+
+### 6. Distribution
+
+According to Central Limit Theorem, the density curve of the 1000 samples should follow approximately a bell curve whose mean is the mean of the exponential (mu = 5) and whose standard deviation is the standard error of the mean (sigma / sqrt(n)).
+
+To verify this hypothesis, we plot:
+
+   - The density function of the distribution of the sample means (gold line),
+   - The normal distribution with mean mu = 5 and standard error of the mean se = sigma / sqrt(n)  (black line)
+
+```{r distribution_plot, echo = TRUE, fig.width = 9, fig.height = 6, fig.align = 'center'}
+# We plot the density
+g <- ggplot(nosim_averages, aes(x = xm)) + 
+     geom_histogram(alpha = .20, binwidth=.2, colour = "black", aes(y = ..density..)) +
+     ggtitle("Distribution of exponential sample means vs. Normal distribution") + 
+     xlab("Sample Means") + ylab("Density") +
+     geom_density(colour = "darkgoldenrod", size = 2) 
+
+# We draw the normal distribution centered on mu = 5, with 
+# standard deviation = standard error of the mean
+g <- g + stat_function(fun = dnorm, args = list(mean = t_mean,sd = t_sd/sqrt(n)),size = 2)
+g
+```
+
+We verify that the density function of the sample means (gold line) is very close to the normal distribution (black line), which is stated by the Central Limtit Theorem.
+This is expected given the tests of the mean and variance successfully conducted previously.
+
+                      ----------------- End of the analysis ----------------- 
+
+
+
+
